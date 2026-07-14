@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { openWikiHomeDir } from "../openwiki-home.js";
-import { INSTALL_ID_PATH, FIRST_RUN_NOTICE } from "./config.js";
+import { INSTALL_ID_PATH } from "./config.js";
 import { noticeSuppressed } from "./gates.js";
 
 /**
@@ -38,24 +38,23 @@ export async function getOrCreateInstallId(): Promise<{
 }
 
 /**
- * Shows the one-time notice on the first run on this machine (install id just
- * minted). Suppressed (nothing printed, no id minted) when opted out or in CI.
- * Never throws. Called at the START of a run so the disclosure precedes output.
+ * Whether the one-time first-run notice should be shown now: true only on the
+ * first run on this machine (install id just minted). Suppressed (returns false,
+ * mints no id) when opted out or in CI. Never throws. The caller decides how to
+ * render it (an Ink box in the interactive TUI, plain text on stderr for print),
+ * so this stays free of presentation. Called at the START of a run so the
+ * disclosure precedes any output.
  */
-export async function showFirstRunNoticeIfNeeded(): Promise<void> {
+export async function firstRunNoticePending(): Promise<boolean> {
   if (noticeSuppressed()) {
-    return;
+    return false;
   }
 
   try {
-    const { isNew } = await getOrCreateInstallId();
-
-    if (isNew) {
-      // console.error so Ink's patchConsole renders it above the live TUI.
-      console.error(FIRST_RUN_NOTICE);
-    }
+    return (await getOrCreateInstallId()).isNew;
   } catch {
     // Intentionally ignored: telemetry must never break a run.
+    return false;
   }
 }
 
