@@ -39,7 +39,7 @@ export type OpenWikiRunOptions = {
   outputMode?: OpenWikiOutputMode;
   threadId?: string;
   userMessage?: string | null;
-  telemetryContext?: RunTelemetryContext;
+  telemetryFile?: string;
 };
 
 export type UpdateMetadata = {
@@ -54,23 +54,3 @@ export type RunContext = {
   gitSummary: string;
   wikiGoal?: string;
 };
-
-/**
- * Invocation shape passed from the CLI for telemetry.
- */
-export interface RunTelemetryContext {
-  /**
-   * Flag names present on the invocation, e.g. ["print","mode","model-id"].
-   */
-  flags: string[];
-
-  /**
-   * Whether this run is interactive (Ink UI) or one-shot print mode.
-   */
-  context: "interactive" | "print";
-
-  /**
-   * File target from --telemetry-file.
-   */
-  telemetryFile?: string;
-}

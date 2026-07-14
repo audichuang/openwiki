@@ -43,7 +43,6 @@ import { stripHtmlTags } from "./utils.js";
 import {
   type OpenWikiRunEvent,
   type OpenWikiRunResult,
-  type RunTelemetryContext,
 } from "./agent/types.js";
 import {
   runOpenWikiIngestion,
@@ -548,7 +547,7 @@ function App({ command }: AppProps) {
           outputMode: runtimeOutputMode,
           threadId: sessionThreadId.current,
           userMessage: activeUserMessage,
-          telemetryContext: buildRunTelemetryContext(command, true),
+          telemetryFile: command.telemetryFile ?? undefined,
           onEvent: (event) => {
             if (!mountedRef.current || activeRunId.current !== runId) {
               return;
@@ -3929,26 +3928,6 @@ function shouldAutoExitStartupRun(command: CliCommand): boolean {
  * Builds the telemetry context for a run from the parsed command. Flag names
  * only, never argument values.
  */
-function buildRunTelemetryContext(
-  command: Extract<CliCommand, { kind: "run" }>,
-  isInteractive: boolean,
-): RunTelemetryContext {
-  const flags: string[] = [];
-
-  if (command.command === "init") flags.push("init");
-  if (command.command === "update") flags.push("update");
-  if (command.print) flags.push("print");
-  if (command.modeSource !== "default") flags.push("mode");
-  if (command.modelId) flags.push("model-id");
-  if (command.telemetryFile) flags.push("telemetry-file");
-
-  return {
-    flags,
-    context: isInteractive ? "interactive" : "print",
-    telemetryFile: command.telemetryFile ?? undefined,
-  };
-}
-
 async function runPrintCommand(
   command: Extract<CliCommand, { kind: "run" }>,
 ): Promise<void> {
@@ -3969,7 +3948,7 @@ async function runPrintCommand(
       outputMode: runtimeOutputMode,
       threadId: createOpenWikiThreadId(runtimeCwd),
       userMessage: command.userMessage,
-      telemetryContext: buildRunTelemetryContext(command, false),
+      telemetryFile: command.telemetryFile ?? undefined,
       onEvent: (event) => {
         if (event.type === "text" && event.source !== "subgraph") {
           output.push(event.text);

@@ -70,15 +70,10 @@ afterEach(() => {
 function runDetails(overrides: Partial<RunTelemetry> = {}): RunTelemetry {
   return {
     command: "init",
+    outcome: "success",
     mode: "personal",
     provider: "anthropic",
-    modelId: "demo",
-    baseUrlOverride: false,
-    outcome: "success",
-    durationMs: 1,
     configuredConnectors: [],
-    flags: [],
-    context: "print",
     ...overrides,
   };
 }
@@ -212,7 +207,7 @@ describe("senders.recordRun", () => {
     await rm(file, { force: true });
   });
 
-  test("normal run uses the install id and the caller's context", async () => {
+  test("human run uses the install id, ci=false, profile on", async () => {
     const file = path.join(tmpdir(), "ow-tel-normal.json");
 
     await recordRun(runDetails({ telemetryFile: file }));
@@ -222,20 +217,20 @@ describe("senders.recordRun", () => {
       sent: boolean;
       event: {
         distinctId: string;
-        properties: { execution: string; $process_person_profile: boolean };
+        properties: { ci: boolean; $process_person_profile: boolean };
       };
     };
     expect(tee.ci).toBe(false);
     expect(tee.sent).toBe(true);
     expect(tee.event.distinctId).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(tee.event.properties.execution).toBe("print");
+    expect(tee.event.properties.ci).toBe(false);
     // Human runs are identified (person profile on) so retention works.
     expect(tee.event.properties.$process_person_profile).toBe(true);
     expect(posthog.capture).toHaveBeenCalledOnce();
     await rm(file, { force: true });
   });
 
-  test("CI run uses the sentinel id and execution=ci", async () => {
+  test("CI run uses the sentinel id, ci=true, profile off", async () => {
     process.env.OPENWIKI_SCHEDULED = "1";
     const file = path.join(tmpdir(), "ow-tel-ci.json");
 
@@ -245,12 +240,12 @@ describe("senders.recordRun", () => {
       ci: boolean;
       event: {
         distinctId: string;
-        properties: { execution: string; $process_person_profile: boolean };
+        properties: { ci: boolean; $process_person_profile: boolean };
       };
     };
     expect(tee.ci).toBe(true);
     expect(tee.event.distinctId).toBe("ci-unknown");
-    expect(tee.event.properties.execution).toBe("ci");
+    expect(tee.event.properties.ci).toBe(true);
     // CI stays anonymous (no person profile).
     expect(tee.event.properties.$process_person_profile).toBe(false);
     await rm(file, { force: true });
@@ -277,7 +272,7 @@ describe("getConfiguredConnectorIds", () => {
   });
 });
 
-describe("recordRun connector + environment properties", () => {
+describe("recordRun connector properties", () => {
   function runEvent(): { event: string; properties: Record<string, unknown> } {
     return posthog.capture.mock.calls[0]?.[0] as {
       event: string;
@@ -309,13 +304,17 @@ describe("recordRun connector + environment properties", () => {
     );
   });
 
-  test("the coarse environment is stamped once by send()", async () => {
-    await recordRun(runDetails());
+  test("update runs omit the init-only setup fields", async () => {
+    // The agent only sets mode/provider/connectors on init; an update payload
+    // built without them must not carry mode/provider/connector_ properties.
+    await recordRun({ command: "update", outcome: "success" });
 
     const props = runEvent().properties;
-    expect(typeof props.app_version).toBe("string");
-    expect(typeof props.os).toBe("string");
-    expect(typeof props.arch).toBe("string");
-    expect(typeof props.node_version).toBe("string");
+    expect(props).not.toHaveProperty("mode");
+    expect(props).not.toHaveProperty("provider");
+    expect(Object.keys(props).some((key) => key.startsWith("connector_"))).toBe(
+      false,
+    );
+    expect(props).toMatchObject({ command: "update", outcome: "success" });
   });
 });

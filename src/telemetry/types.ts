@@ -21,19 +21,13 @@ export type TelemetryErrorClass =
 export type TelemetryMode = "code" | "personal";
 
 /**
- * How the CLI was invoked, as reported by the caller.
- */
-export type TelemetryContext = "interactive" | "print" | "cli";
-
-/**
- * The `execution` value actually emitted. `send` derives it from the caller's
- * `TelemetryContext`, overriding it to "ci" when running in CI (a fact read from
- * the environment, not supplied by the caller).
- */
-export type TelemetryExecution = TelemetryContext | "ci";
-
-/**
  * Everything the run event reports, assembled by the agent run lifecycle.
+ *
+ * Two tiers: `command`, `outcome`, and `errorClass` ride on every run
+ * (activity + reliability); `mode`, `provider`, and `configuredConnectors` are
+ * setup choices, captured on **init only** (the configuration moment), so the
+ * agent leaves them undefined on updates. The `ci` split and identity are added
+ * by `send`, not here.
  */
 export interface RunTelemetry {
   /**
@@ -42,26 +36,6 @@ export interface RunTelemetry {
    * ever produce an openwiki_run event.
    */
   command: "init" | "update";
-
-  /**
-   * Which brain the run targeted (code = repository, personal = local wiki).
-   */
-  mode: TelemetryMode;
-
-  /**
-   * LLM provider id used for the run (e.g. "anthropic", "openai").
-   */
-  provider: string;
-
-  /**
-   * Resolved model id for the run.
-   */
-  modelId: string;
-
-  /**
-   * Whether a custom provider base URL is configured. The URL is never sent.
-   */
-  baseUrlOverride: boolean;
 
   /**
    * How the run ended. `noop` is an update that short-circuited unchanged.
@@ -74,26 +48,23 @@ export interface RunTelemetry {
   errorClass?: TelemetryErrorClass;
 
   /**
-   * Wall-clock duration of the run, in milliseconds.
+   * Which brain was set up (code = repository, personal = local wiki). Init
+   * only; undefined on updates.
    */
-  durationMs: number;
+  mode?: TelemetryMode;
 
   /**
-   * Ids of auth-gated connectors fully configured on this machine. Each becomes
-   * a boolean `connector_<id>` property on the event (present = configured), so
-   * connector adoption is a point-and-click dimension with no array unnesting.
+   * LLM provider chosen at setup (e.g. "anthropic", "openai"). Init only;
+   * undefined on updates.
    */
-  configuredConnectors: string[];
+  provider?: string;
 
   /**
-   * Flag names present on the invocation. Names only, never values.
+   * Ids of auth-gated connectors configured at setup. Each becomes a boolean
+   * `connector_<id>` property (present = configured), so connector adoption is a
+   * point-and-click dimension with no array unnesting. Init only.
    */
-  flags: string[];
-
-  /**
-   * How the CLI was invoked. `send` overrides this to "ci" in CI.
-   */
-  context: TelemetryContext;
+  configuredConnectors?: string[];
 
   /**
    * Optional tee target from --telemetry-file.

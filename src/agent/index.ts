@@ -88,8 +88,6 @@ export async function runOpenWikiAgent(
 
   await loadOpenWikiEnv();
 
-  const telemetryStart = Date.now();
-
   await ensureWriteConnectorSkill();
   emitDebug(options, "env=loaded ~/.openwiki/.env");
   emitDebug(options, `env.afterLoad ${formatEnvironmentDebug()}`);
@@ -105,9 +103,7 @@ export async function runOpenWikiAgent(
 
       await recordRunSafe(command, options, {
         provider: resolveConfiguredProvider(),
-        modelId: noopStatus.model,
         outcome: "noop",
-        durationMs: Date.now() - telemetryStart,
       });
 
       return {
@@ -163,9 +159,7 @@ export async function runOpenWikiAgent(
 
     await recordRunSafe(command, options, {
       provider,
-      modelId,
       outcome: "success",
-      durationMs: Date.now() - telemetryStart,
     });
 
     return result;
@@ -174,10 +168,8 @@ export async function runOpenWikiAgent(
 
     await recordRunSafe(command, options, {
       provider,
-      modelId,
       outcome: "failure",
       errorClass: classifyError(error),
-      durationMs: Date.now() - telemetryStart,
     });
 
     throw error;
@@ -326,13 +318,11 @@ async function recordRunSafe(
   command: OpenWikiCommand,
   options: OpenWikiRunOptions,
   facts: {
-    // Optional: a failure during provider/model resolution can happen before
-    // either is known, and we still want to record that failure.
+    // Optional: a failure during provider resolution can happen before the
+    // provider is known, and we still want to record that failure.
     provider?: OpenWikiProvider;
-    modelId?: string;
     outcome: "success" | "failure" | "noop";
     errorClass?: TelemetryErrorClass;
-    durationMs: number;
   },
 ): Promise<void> {
   // Chat is deliberately not recorded: it is interactive and would emit one
@@ -342,24 +332,21 @@ async function recordRunSafe(
   }
 
   const outputMode = options.outputMode ?? "local-wiki";
-  const ctx = options.telemetryContext;
 
   await recordRun({
     command,
-    mode: outputMode === "repository" ? "code" : "personal",
-    provider: facts.provider ?? "unknown",
-    modelId: facts.modelId ?? "unknown",
-    baseUrlOverride: facts.provider
-      ? Boolean(resolveProviderBaseUrl(facts.provider))
-      : false,
     outcome: facts.outcome,
     errorClass: facts.errorClass,
-    durationMs: facts.durationMs,
-    // Configured connectors ride along as boolean `connector_<id>` properties.
-    configuredConnectors: getConfiguredConnectorIds(),
-    flags: ctx?.flags ?? [],
-    context: ctx?.context ?? "interactive",
-    telemetryFile: ctx?.telemetryFile,
+    // Setup choices are captured on init only (the configuration moment); on
+    // updates these are omitted entirely.
+    ...(command === "init"
+      ? {
+          mode: outputMode === "repository" ? "code" : "personal",
+          provider: facts.provider ?? "unknown",
+          configuredConnectors: getConfiguredConnectorIds(),
+        }
+      : {}),
+    telemetryFile: options.telemetryFile,
   });
 }
 

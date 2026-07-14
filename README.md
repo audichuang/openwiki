@@ -274,29 +274,29 @@ If there's an inference provider or model you'd like to see added, please open a
 OpenWiki collects anonymous, aggregate usage data so we can understand how the
 tool is used and improve it. Telemetry is on by default and easy to turn off.
 
-**What is collected**, per event (`run`, `auth`, `ingest`), keyed by a random
+**What is collected**, on a single `openwiki_run` event, keyed by a random
 install ID stored locally in `~/.openwiki/install-id`:
 
-- Command run (init / update) and which mode (code / personal). Interactive
-  chat, auth, and ingest are not recorded.
-- Provider and model ID, and whether a custom base URL is configured (never the
-  URL itself).
-- Outcome (success / failure / no-op) and, on failure, a coarse error category
-  (never the error message).
-- Duration and which connectors are configured (connector names only, never
+- Every run: the command (init / update) and the outcome (success / failure /
+  no-op), plus a coarse error category on failure (never the error message).
+  Interactive chat, `auth`, and `ingest` are not recorded.
+- At setup (on init only): which brain mode (code / personal), the model
+  provider, and which connectors you configured (connector names only, never
   their contents).
-- Coarse environment: OpenWiki version, OS family, CPU arch, Node version.
 
 **What is never collected:** file contents, repository data or names,
 credentials, prompts, model output, connector payloads, error messages, file
-paths, URLs, your IP address, or any personal information. Geoip enrichment is
-disabled and your IP is never stored. Events are grouped by your random install
-ID so we can measure repeat usage, but that ID contains no personal data.
+paths, URLs, model IDs, run duration, your IP address, or any personal
+information. Geoip enrichment is disabled and your IP is never stored. Events
+are grouped by your random install ID so we can measure repeat usage, but that
+ID contains no personal data.
 
-**Scheduled/CI runs** are collected as anonymous reliability data (success rate,
-latency, provider), but under a shared CI identifier, not a per-machine install
-ID, and never counted as distinct users. To disable in CI, set
-`OPENWIKI_TELEMETRY_DISABLED=1` in your workflow environment.
+**Scheduled/CI runs** are collected as anonymous reliability data (tagged so
+they can be told apart from human runs), under a shared CI identifier rather than
+a per-machine install ID, and never counted as distinct installs. To disable in
+CI, set `OPENWIKI_TELEMETRY_DISABLED=1` in your workflow environment.
+
+To see exactly what a run would send, add `--telemetry-file=<path>` to any run.
 
 ### Opting out
 
