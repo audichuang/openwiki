@@ -46,6 +46,17 @@ export function noticeSuppressed(): boolean {
 }
 
 /**
+ * True when running the compiled, published build (from `dist/`); false when
+ * running from source (`src/` via tsx, or under vitest). Stamped on every event
+ * as `production` so real installed-package usage can be separated from local
+ * dev/test runs. Deliberately based on build origin, not `NODE_ENV` — that var
+ * is common in developers' own shells and would misclassify real users.
+ */
+export function isProductionBuild(): boolean {
+  return import.meta.url.includes("/dist/");
+}
+
+/**
  * Treats "0", "false", and "" as not set; any other value as truthy.
  */
 function isTruthyEnv(value?: string): boolean {

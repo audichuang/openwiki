@@ -304,6 +304,14 @@ describe("recordRun connector properties", () => {
     );
   });
 
+  test("stamps production=false when running from source (dev/test)", async () => {
+    // Tests import from src/, so isProductionBuild() (dist/ check) is false;
+    // the published build runs from dist/ and would send production=true.
+    await recordRun(runDetails());
+
+    expect(runEvent().properties.production).toBe(false);
+  });
+
   test("update runs omit the init-only setup fields", async () => {
     // The agent only sets mode/provider/connectors on init; an update payload
     // built without them must not carry mode/provider/connector_ properties.

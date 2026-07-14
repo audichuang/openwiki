@@ -3,7 +3,12 @@ import path from "node:path";
 
 import { capture } from "./client.js";
 import { DEFAULT_POSTHOG_HOST, TELEMETRY_RUN_EVENT } from "./config.js";
-import { ciSentinelId, isCiEnvironment, isTelemetryDisabled } from "./gates.js";
+import {
+  ciSentinelId,
+  isCiEnvironment,
+  isProductionBuild,
+  isTelemetryDisabled,
+} from "./gates.js";
 import { getOrCreateInstallId } from "./install-id.js";
 import type { RunTelemetry, TelemetryEvent } from "./types.js";
 
@@ -74,6 +79,9 @@ async function send(
       event: eventName,
       properties: {
         ...properties,
+        // True for the published build, false for dev/source runs; lets real
+        // usage be separated from local testing and pre-launch seed data.
+        production: isProductionBuild(),
         // Splits any metric human vs CI; also drives identity below.
         ci,
         // Human runs are identified (enables distinct-install counts and
