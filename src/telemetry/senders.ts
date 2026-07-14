@@ -2,18 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { capture } from "./client.js";
-import {
-  DEFAULT_POSTHOG_HOST,
-  TELEMETRY_AUTH_EVENT,
-  TELEMETRY_INGEST_EVENT,
-  TELEMETRY_RUN_EVENT,
-} from "./config.js";
+import { DEFAULT_POSTHOG_HOST, TELEMETRY_RUN_EVENT } from "./config.js";
 import { getTelemetryEnv } from "./environment.js";
 import { ciSentinelId, isCiEnvironment, isTelemetryDisabled } from "./gates.js";
 import { getOrCreateInstallId } from "./install-id.js";
 import type {
-  AuthTelemetry,
-  IngestTelemetry,
   RunTelemetry,
   TelemetryContext,
   TelemetryEvent,
@@ -21,11 +14,11 @@ import type {
 } from "./types.js";
 
 /**
- * Records a completed init/update run. Never throws. (Chat is not recorded.)
+ * Records a completed init/update run: the single event OpenWiki emits. Each
+ * configured connector rides along as a boolean `connector_<id>` property.
+ * Never throws. (Chat is not recorded.)
  */
 export async function recordRun(details: RunTelemetry): Promise<void> {
-  const env = getTelemetryEnv();
-
   await send(
     TELEMETRY_RUN_EVENT,
     {
@@ -37,51 +30,22 @@ export async function recordRun(details: RunTelemetry): Promise<void> {
       outcome: details.outcome,
       ...(details.errorClass ? { error_class: details.errorClass } : {}),
       duration_ms: details.durationMs,
-      connectors_configured: details.connectorsConfigured,
-      connectors_used: details.connectorsUsed,
+      ...connectorProperties(details.configuredConnectors),
       flags: details.flags,
-      app_version: env.appVersion,
-      os: env.os,
-      arch: env.arch,
-      node_version: env.nodeVersion,
     },
     { context: details.context, telemetryFile: details.telemetryFile },
   );
 }
 
 /**
- * Records an auth command outcome (configure / oauth / tools / list).
+ * Turns configured connector ids into boolean event properties, e.g.
+ * `["web-search", "notion"]` -> `{ connector_web_search: true, connector_notion: true }`.
+ * Only configured connectors appear; absence means "not configured".
  */
-export async function recordAuth(details: AuthTelemetry): Promise<void> {
-  const env = getTelemetryEnv();
-
-  await send(TELEMETRY_AUTH_EVENT, {
-    provider: details.provider,
-    action: details.action,
-    outcome: details.outcome,
-    ...(details.errorClass ? { error_class: details.errorClass } : {}),
-    app_version: env.appVersion,
-    os: env.os,
-    node_version: env.nodeVersion,
-  });
-}
-
-/**
- * Records an ingest command outcome. `source` is an enum id, never a name.
- */
-export async function recordIngest(details: IngestTelemetry): Promise<void> {
-  const env = getTelemetryEnv();
-
-  await send(TELEMETRY_INGEST_EVENT, {
-    source: details.source,
-    scope: details.scope,
-    outcome: details.outcome,
-    ...(details.errorClass ? { error_class: details.errorClass } : {}),
-    duration_ms: details.durationMs,
-    app_version: env.appVersion,
-    os: env.os,
-    node_version: env.nodeVersion,
-  });
+function connectorProperties(configured: string[]): Record<string, true> {
+  return Object.fromEntries(
+    configured.map((id) => [`connector_${id.replace(/-/g, "_")}`, true]),
+  );
 }
 
 /**
@@ -117,6 +81,7 @@ async function send(
   }
 
   try {
+    const env = getTelemetryEnv();
     const ci = isCiEnvironment();
     const distinctId = ci ? ciSentinelId() : (await getOrCreateInstallId()).id;
     // Caller reports interactive/print/cli; the environment overrides to "ci".
@@ -128,6 +93,11 @@ async function send(
       event: eventName,
       properties: {
         ...properties,
+        // Coarse environment, stamped once here for every event.
+        app_version: env.appVersion,
+        os: env.os,
+        arch: env.arch,
+        node_version: env.nodeVersion,
         execution,
         // Human runs are identified (enables retention/lifecycle); CI runs stay
         // anonymous (the sentinel would collapse to one meaningless person, and

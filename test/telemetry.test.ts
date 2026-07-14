@@ -30,11 +30,7 @@ import {
   isTelemetryDisabled,
   noticeSuppressed,
 } from "../src/telemetry/gates.ts";
-import {
-  recordAuth,
-  recordIngest,
-  recordRun,
-} from "../src/telemetry/senders.ts";
+import { recordRun } from "../src/telemetry/senders.ts";
 import type { RunTelemetry } from "../src/telemetry/types.ts";
 
 const ENV_KEYS = [
@@ -80,8 +76,7 @@ function runDetails(overrides: Partial<RunTelemetry> = {}): RunTelemetry {
     baseUrlOverride: false,
     outcome: "success",
     durationMs: 1,
-    connectorsConfigured: [],
-    connectorsUsed: [],
+    configuredConnectors: [],
     flags: [],
     context: "print",
     ...overrides,
@@ -282,50 +277,45 @@ describe("getConfiguredConnectorIds", () => {
   });
 });
 
-describe("recordAuth / recordIngest", () => {
-  function capturedEvent(): {
-    event: string;
-    properties: Record<string, unknown>;
-  } {
+describe("recordRun connector + environment properties", () => {
+  function runEvent(): { event: string; properties: Record<string, unknown> } {
     return posthog.capture.mock.calls[0]?.[0] as {
       event: string;
       properties: Record<string, unknown>;
     };
   }
 
-  test("recordAuth captures the auth event", async () => {
-    await recordAuth({
-      provider: "notion",
-      action: "oauth",
-      outcome: "success",
-    });
+  test("configured connectors become boolean connector_<id> properties", async () => {
+    await recordRun(
+      runDetails({ configuredConnectors: ["web-search", "notion"] }),
+    );
 
-    const arg = capturedEvent();
-    expect(arg.event).toBe("openwiki_auth");
+    const arg = runEvent();
+    expect(arg.event).toBe("openwiki_run");
+    // Hyphens are normalized to underscores; only configured ones appear.
     expect(arg.properties).toMatchObject({
-      provider: "notion",
-      action: "oauth",
-      outcome: "success",
-      execution: "cli",
+      connector_web_search: true,
+      connector_notion: true,
     });
+    expect(arg.properties).not.toHaveProperty("connector_slack");
   });
 
-  test("recordIngest captures the ingest event with source/scope", async () => {
-    await recordIngest({
-      source: "web-search",
-      scope: "source",
-      outcome: "success",
-      durationMs: 5,
-    });
+  test("no connector_ properties when nothing is configured", async () => {
+    await recordRun(runDetails({ configuredConnectors: [] }));
 
-    const arg = capturedEvent();
-    expect(arg.event).toBe("openwiki_ingest");
-    expect(arg.properties).toMatchObject({
-      source: "web-search",
-      scope: "source",
-      outcome: "success",
-      duration_ms: 5,
-      execution: "cli",
-    });
+    const props = runEvent().properties;
+    expect(Object.keys(props).some((key) => key.startsWith("connector_"))).toBe(
+      false,
+    );
+  });
+
+  test("the coarse environment is stamped once by send()", async () => {
+    await recordRun(runDetails());
+
+    const props = runEvent().properties;
+    expect(typeof props.app_version).toBe("string");
+    expect(typeof props.os).toBe("string");
+    expect(typeof props.arch).toBe("string");
+    expect(typeof props.node_version).toBe("string");
   });
 });

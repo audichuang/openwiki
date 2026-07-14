@@ -599,15 +599,11 @@ export function isDevelopmentMode(): boolean {
 }
 
 /**
- * True for commands that may send telemetry and therefore require the one-time
- * disclosure. Only init/update runs emit; chat is excluded (it records nothing),
- * so a chat-only session collects nothing and needs no disclosure.
+ * True for commands that send telemetry and therefore require the one-time
+ * disclosure. Only init/update runs emit the single openwiki_run event; chat,
+ * auth, and ingest record nothing, so those sessions need no disclosure.
  */
 export function commandEmitsTelemetry(command: CliCommand): boolean {
-  if (command.kind === "auth" || command.kind === "ingest") {
-    return true;
-  }
-
   return (
     command.kind === "run" &&
     !command.dryRun &&

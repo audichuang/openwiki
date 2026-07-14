@@ -277,14 +277,14 @@ tool is used and improve it. Telemetry is on by default and easy to turn off.
 **What is collected**, per event (`run`, `auth`, `ingest`), keyed by a random
 install ID stored locally in `~/.openwiki/install-id`:
 
-- Command run (init / update / auth / ingest) and which mode (code / personal).
-  Interactive chat is not recorded.
+- Command run (init / update) and which mode (code / personal). Interactive
+  chat, auth, and ingest are not recorded.
 - Provider and model ID, and whether a custom base URL is configured (never the
   URL itself).
 - Outcome (success / failure / no-op) and, on failure, a coarse error category
   (never the error message).
-- Duration and which connectors are configured and used (connector names only,
-  never their contents).
+- Duration and which connectors are configured (connector names only, never
+  their contents).
 - Coarse environment: OpenWiki version, OS family, CPU arch, Node version.
 
 **What is never collected:** file contents, repository data or names,

@@ -46,7 +46,6 @@ import {
   type RunTelemetryContext,
 } from "./agent/types.js";
 import {
-  describeIngestTarget,
   runOpenWikiIngestion,
   type OpenWikiIngestionResult,
 } from "./ingestion.js";
@@ -81,12 +80,7 @@ import {
   type OpenWikiProvider,
 } from "./constants.js";
 import type { OpenWikiCommand, OpenWikiOutputMode } from "./agent/types.js";
-import {
-  recordAuth,
-  recordIngest,
-  classifyError,
-  showFirstRunNoticeIfNeeded,
-} from "./telemetry/index.js";
+import { showFirstRunNoticeIfNeeded } from "./telemetry/index.js";
 
 type RunState =
   | { status: "idle" }
@@ -3692,9 +3686,6 @@ function formatScheduleStatus(schedule: ConnectorScheduleStatus): string {
 async function runIngestCommand(
   command: Extract<CliCommand, { kind: "ingest" }>,
 ): Promise<void> {
-  const start = Date.now();
-  const { source, scope } = describeIngestTarget(command.target);
-
   try {
     const result = await runOpenWikiIngestion(process.cwd(), {
       debug: isDebugMode(),
@@ -3718,29 +3709,9 @@ async function runIngestCommand(
     const hadError = result.results.some(
       (sourceResult) => sourceResult.status === "error",
     );
-    // For an instance target, take the real connector id from the result (an
-    // enum) rather than the user-chosen instance id.
-    const resolvedSource =
-      scope === "instance"
-        ? (result.results[0]?.connectorId ?? source)
-        : source;
-
-    await recordIngest({
-      source: resolvedSource,
-      scope,
-      outcome: hadError ? "failure" : "success",
-      durationMs: Date.now() - start,
-    });
 
     process.exitCode = hadError ? 1 : 0;
   } catch (error) {
-    await recordIngest({
-      source,
-      scope,
-      outcome: "failure",
-      errorClass: classifyError(error),
-      durationMs: Date.now() - start,
-    });
     process.stderr.write(`${getErrorMessage(error)}\n`);
     writePrintErrorDiagnostics(error);
     process.exitCode = 1;
@@ -3811,20 +3782,8 @@ async function runAuthCommand(
       }
     }
 
-    // Single success record covering every sub-action (list/configure/tools/oauth).
-    await recordAuth({
-      provider: command.provider ?? "list",
-      action: command.action,
-      outcome: "success",
-    });
     process.exitCode = 0;
   } catch (error) {
-    await recordAuth({
-      provider: command.provider ?? "list",
-      action: command.action,
-      outcome: "failure",
-      errorClass: classifyError(error),
-    });
     process.stderr.write(`${getErrorMessage(error)}\n`);
     process.exitCode = 1;
   }

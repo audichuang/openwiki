@@ -74,13 +74,3 @@ export interface RunTelemetryContext {
    */
   telemetryFile?: string;
 }
-
-/**
- * Runtime counters the agent mutates during a run, read back for telemetry.
- */
-export interface RunTelemetryStats {
-  /**
-   * Ids of connectors invoked this run.
-   */
-  connectorsUsed: Set<string>;
-}

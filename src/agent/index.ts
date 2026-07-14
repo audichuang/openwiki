@@ -68,11 +68,7 @@ import {
   recordRun,
   type TelemetryErrorClass,
 } from "../telemetry/index.js";
-import {
-  getConfiguredConnectorIds,
-  isConnectorId,
-} from "../connectors/registry.js";
-import type { RunTelemetryStats } from "./types.js";
+import { getConfiguredConnectorIds } from "../connectors/registry.js";
 
 export async function runOpenWikiAgent(
   command: OpenWikiCommand,
@@ -93,7 +89,6 @@ export async function runOpenWikiAgent(
   await loadOpenWikiEnv();
 
   const telemetryStart = Date.now();
-  const stats: RunTelemetryStats = { connectorsUsed: new Set() };
 
   await ensureWriteConnectorSkill();
   emitDebug(options, "env=loaded ~/.openwiki/.env");
@@ -113,7 +108,6 @@ export async function runOpenWikiAgent(
         modelId: noopStatus.model,
         outcome: "noop",
         durationMs: Date.now() - telemetryStart,
-        stats,
       });
 
       return {
@@ -165,7 +159,6 @@ export async function runOpenWikiAgent(
       provider,
       modelId,
       providerRetryAttempts,
-      stats,
     );
 
     await recordRunSafe(command, options, {
@@ -173,7 +166,6 @@ export async function runOpenWikiAgent(
       modelId,
       outcome: "success",
       durationMs: Date.now() - telemetryStart,
-      stats,
     });
 
     return result;
@@ -186,7 +178,6 @@ export async function runOpenWikiAgent(
       outcome: "failure",
       errorClass: classifyError(error),
       durationMs: Date.now() - telemetryStart,
-      stats,
     });
 
     throw error;
@@ -202,7 +193,6 @@ async function runOpenWikiAgentCore(
   provider: OpenWikiProvider,
   modelId: string,
   providerRetryAttempts: number,
-  stats: RunTelemetryStats,
 ): Promise<OpenWikiRunResult> {
   const outputMode = options.outputMode ?? "local-wiki";
   const context = await createRunContext(command, cwd, outputMode);
@@ -264,13 +254,6 @@ async function runOpenWikiAgentCore(
   try {
     for await (const chunk of stream) {
       const event = parseStreamEvent(chunk);
-
-      if (event?.type === "tool_start") {
-        const connectorId = extractConnectorId(event.input);
-        if (connectorId) {
-          stats.connectorsUsed.add(connectorId);
-        }
-      }
 
       if (event) {
         options.onEvent?.(event);
@@ -339,14 +322,6 @@ async function runOpenWikiAgentCore(
   };
 }
 
-function extractConnectorId(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) {
-    return undefined;
-  }
-  const value = (input as { connectorId?: unknown }).connectorId;
-  return typeof value === "string" && isConnectorId(value) ? value : undefined;
-}
-
 async function recordRunSafe(
   command: OpenWikiCommand,
   options: OpenWikiRunOptions,
@@ -358,7 +333,6 @@ async function recordRunSafe(
     outcome: "success" | "failure" | "noop";
     errorClass?: TelemetryErrorClass;
     durationMs: number;
-    stats: RunTelemetryStats;
   },
 ): Promise<void> {
   // Chat is deliberately not recorded: it is interactive and would emit one
@@ -381,8 +355,8 @@ async function recordRunSafe(
     outcome: facts.outcome,
     errorClass: facts.errorClass,
     durationMs: facts.durationMs,
-    connectorsConfigured: getConfiguredConnectorIds(),
-    connectorsUsed: [...facts.stats.connectorsUsed],
+    // Configured connectors ride along as boolean `connector_<id>` properties.
+    configuredConnectors: getConfiguredConnectorIds(),
     flags: ctx?.flags ?? [],
     context: ctx?.context ?? "interactive",
     telemetryFile: ctx?.telemetryFile,

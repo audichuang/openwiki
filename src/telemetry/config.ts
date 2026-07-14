@@ -20,11 +20,10 @@ export const INSTALL_ID_PATH = path.join(openWikiHomeDir, "install-id");
 export const FLUSH_TIMEOUT_MS = 2000;
 
 /**
- * The three usage events OpenWiki emits.
+ * The single usage event OpenWiki emits. Everything (mode, provider, outcome,
+ * latency, environment, configured connectors) rides on this one event.
  */
 export const TELEMETRY_RUN_EVENT = "openwiki_run";
-export const TELEMETRY_AUTH_EVENT = "openwiki_auth";
-export const TELEMETRY_INGEST_EVENT = "openwiki_ingest";
 
 /**
  * One-time disclosure shown before the first event on a machine.

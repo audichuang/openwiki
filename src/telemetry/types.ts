@@ -79,14 +79,11 @@ export interface RunTelemetry {
   durationMs: number;
 
   /**
-   * Ids of auth-gated connectors fully configured on this machine.
+   * Ids of auth-gated connectors fully configured on this machine. Each becomes
+   * a boolean `connector_<id>` property on the event (present = configured), so
+   * connector adoption is a point-and-click dimension with no array unnesting.
    */
-  connectorsConfigured: string[];
-
-  /**
-   * Ids of connectors actually invoked during this run.
-   */
-  connectorsUsed: string[];
+  configuredConnectors: string[];
 
   /**
    * Flag names present on the invocation. Names only, never values.
@@ -102,61 +99,6 @@ export interface RunTelemetry {
    * Optional tee target from --telemetry-file.
    */
   telemetryFile?: string;
-}
-
-/**
- * What the auth event reports, assembled by the auth command handler.
- */
-export interface AuthTelemetry {
-  /**
-   * Auth provider id (e.g. "slack", "notion", "gmail"), or "list".
-   */
-  provider: string;
-
-  /**
-   * Auth subcommand.
-   */
-  action: "configure" | "oauth" | "tools" | "list";
-
-  /**
-   * Whether the auth command succeeded.
-   */
-  outcome: "success" | "failure";
-
-  /**
-   * Closed-set failure category. Present only when `outcome` is "failure".
-   */
-  errorClass?: TelemetryErrorClass;
-}
-
-/**
- * What the ingest event reports, assembled by the ingest command handler.
- */
-export interface IngestTelemetry {
-  /**
-   * Base source/connector enum id (e.g. "web-search"); never an instance name.
-   */
-  source: string;
-
-  /**
-   * Whether the target was all sources, one source, or one instance.
-   */
-  scope: "all" | "source" | "instance";
-
-  /**
-   * Whether ingestion succeeded.
-   */
-  outcome: "success" | "failure";
-
-  /**
-   * Closed-set failure category. Present only when `outcome` is "failure".
-   */
-  errorClass?: TelemetryErrorClass;
-
-  /**
-   * Wall-clock duration of the ingest, in milliseconds.
-   */
-  durationMs: number;
 }
 
 /**
