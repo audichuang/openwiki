@@ -41,7 +41,12 @@ import {
   setThreadSessionId,
 } from "./engines/runner.js";
 import type { EngineRunSpec } from "./engines/types.js";
-import { createSystemPrompt, createUserPrompt } from "./prompt.js";
+import {
+  createRuntimeNote,
+  createSystemPrompt,
+  createUserPrompt,
+  type PromptEngine,
+} from "./prompt.js";
 import { syncBundledSkills } from "./skills.js";
 import {
   createVertexAuthFetch,
@@ -310,7 +315,13 @@ async function runOpenWikiAgentCore(
     messages: [
       {
         role: "user",
-        content: createRunUserMessage(command, cwd, context, options),
+        content: createRunUserMessage(
+          command,
+          cwd,
+          context,
+          options,
+          "deepagents",
+        ),
       },
     ],
   };
@@ -397,7 +408,13 @@ async function runAgentCliRun(
   // can pass system instructions via --append-system-prompt while file-based
   // CLIs (Grok Build) let the runner concatenate them into the prompt file.
   const systemPrompt = createSystemPrompt(command, outputMode, "agent-cli");
-  const prompt = createRunUserMessage(command, cwd, context, options);
+  const prompt = createRunUserMessage(
+    command,
+    cwd,
+    context,
+    options,
+    "agent-cli",
+  );
   // Personal runs must spawn inside ~/.openwiki/wiki so Claude Code's sandbox
   // can list/edit wiki pages. When the user launched OpenWiki from another
   // directory (e.g. a multi-repo workspace), pass that path as --add-dir so
@@ -434,11 +451,12 @@ export type CheckpointTarget = {
   persistent: boolean;
 };
 
-function createRunUserMessage(
+export function createRunUserMessage(
   command: OpenWikiCommand,
   cwd: string,
   context: Awaited<ReturnType<typeof createRunContext>>,
   options: OpenWikiRunOptions,
+  engine: PromptEngine,
 ): string {
   if (options.isFollowup === true && options.userMessage?.trim()) {
     return options.userMessage.trim();
@@ -449,28 +467,8 @@ function createRunUserMessage(
   return `
 ${createUserPrompt(command, context, options.userMessage ?? null, outputMode)}
 
-${formatRuntimeRootLabel(outputMode)}:
-${cwd}
-
-Runtime note (agent-CLI / real filesystem):
-- ${formatRuntimeRootInstruction(outputMode)}
-- Prefer paths relative to the working directory above.
-- Absolute paths are allowed when reading evidence outside the run root (for example a user note under a workspace that was passed via --add-dir).
-- Prefer Read/Glob/Grep/LS tools over Bash when possible. If using Bash, keep commands single-purpose (avoid chaining with && that can trigger extra approval).
-- Do not invent a repository-local openwiki/ path unless this is a code-mode run rooted in that repository.
+${createRuntimeNote(cwd, outputMode, engine)}
 `.trim();
-}
-
-function formatRuntimeRootLabel(outputMode: OpenWikiOutputMode): string {
-  return outputMode === "local-wiki" ? "Local wiki root" : "Repository root";
-}
-
-function formatRuntimeRootInstruction(outputMode: OpenWikiOutputMode): string {
-  if (outputMode === "local-wiki") {
-    return "Your process working directory is the local personal wiki root above (~/.openwiki/wiki). Write wiki pages with paths relative to that root (quickstart.md, topics/…, sources/…). Do not create a nested openwiki/ directory inside the wiki. Do not look for a repository-local openwiki/ folder under the user's launch directory unless they explicitly ask about code-mode docs.";
-  }
-
-  return "Your process working directory is the target repository root. Write generated docs under openwiki/ (for example openwiki/quickstart.md). Treat the repository as source evidence; do not rewrite application source.";
 }
 
 /**

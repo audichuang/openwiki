@@ -37,7 +37,11 @@ Use only the tools available to you. Prefer built-in filesystem discovery tools 
 
 Run discipline:
 - ${output.filesystemRootInstruction}
-- Never pass host absolute paths like /Users/... to filesystem tools; that creates nested paths inside the repo instead of touching the intended file.
+- ${
+    engine === "agent-cli"
+      ? "Prefer paths relative to the runtime root. Real absolute paths are allowed only to read evidence outside the run root (for example directories passed via --add-dir); never use them for writes."
+      : "Never pass host absolute paths like /Users/... to filesystem tools; that creates nested paths inside the repo instead of touching the intended file."
+  }
 - Shell execute commands run on the host. If you use execute, run commands from the current runtime root unless a source-specific instruction explicitly tells you to inspect a connector raw file or configured local repository path.
 - Do not exhaustively read every file. For a local knowledge wiki, inspect the existing wiki structure and only the relevant connector evidence or configured local repository paths. For an explicit repository source, inspect the repository tree, package/config files, README-style files, entrypoints, routing files, database/schema files, and representative files for each major domain.
 - Do not call glob with **/* from the root. Use targeted discovery by directory and extension. Prefer shell commands like rg --files with excludes for .git, node_modules, dist, build, cache directories, and existing generated wiki output.
@@ -171,16 +175,32 @@ ${createModeInstructions(command, outputMode)}
   if (engine === "agent-cli") {
     return `${prompt}
 
-Agent CLI runtime note:
-- Your working directory is the runtime root for this run.
-- Prefer repository-relative paths with your file tools (for example README.md and openwiki/quickstart.md in code mode).
-- Do not rely on DeepAgents virtual paths that start with a lone /.
-- Do not read or modify files outside the runtime root unless a source-specific instruction explicitly requires it.
-- For init/update documentation runs, write only wiki/docs outputs under openwiki/ (and the OpenWiki blocks in top-level AGENTS.md / CLAUDE.md when required). Do not refactor application source, change tests, or edit unrelated project files.
-`.trim();
+${createAgentCliSystemSuffix(outputMode)}`.trim();
   }
 
   return prompt;
+}
+
+/**
+ * Real-filesystem runtime discipline appended to the agent-CLI system prompt.
+ * Write destination is mode-aware: local-wiki writes at the wiki root (no
+ * nested openwiki/), repository mode writes under openwiki/. Reading evidence
+ * outside the run root (e.g. --add-dir directories) is allowed; writing there
+ * is not.
+ */
+export function createAgentCliSystemSuffix(
+  outputMode: OpenWikiOutputMode,
+): string {
+  const writeTarget =
+    outputMode === "local-wiki"
+      ? "the wiki root (for example quickstart.md or sources/gmail.md); do not create a nested openwiki/ directory"
+      : "openwiki/ (for example openwiki/quickstart.md)";
+
+  return `Agent CLI runtime note:
+- Your working directory is the runtime root for this run, on the real filesystem.
+- Prefer paths relative to that working directory (repository-relative paths in code mode). Do not rely on DeepAgents virtual paths that start with a lone /.
+- You may read evidence outside the runtime root (for example directories passed via --add-dir) using real absolute paths; do not modify files outside the runtime root.
+- For init/update documentation runs, write only wiki/docs outputs under ${writeTarget} (and the OpenWiki blocks in top-level AGENTS.md / CLAUDE.md when required). Do not refactor application source, change tests, or edit unrelated project files.`;
 }
 export function createModeInstructions(
   command: OpenWikiCommand,
@@ -285,6 +305,60 @@ ${context.gitSummary}
 `.trim(),
     userMessage,
   );
+}
+
+/**
+ * Runtime note appended to the user message. The two run engines use opposite
+ * filesystem semantics, so the guidance must match the engine:
+ * - `deepagents` runs through the virtual-root shell backend, where `/` is the
+ *   run root and host absolute paths are misresolved.
+ * - `agent-cli` spawns a vendor CLI on the real filesystem, where relative
+ *   paths and (for `--add-dir` evidence) real absolute paths are correct.
+ */
+export function createRuntimeNote(
+  cwd: string,
+  outputMode: OpenWikiOutputMode,
+  engine: PromptEngine,
+): string {
+  const label =
+    outputMode === "local-wiki" ? "Local wiki root" : "Repository root";
+
+  if (engine === "agent-cli") {
+    return `${label}:
+${cwd}
+
+Runtime note (agent-CLI / real filesystem):
+- ${formatRealFsRootInstruction(outputMode)}
+- Prefer paths relative to the working directory above.
+- Absolute paths are allowed when reading evidence outside the run root (for example a user note under a workspace that was passed via --add-dir).
+- Prefer Read/Glob/Grep/LS tools over Bash when possible. If using Bash, keep commands single-purpose (avoid chaining with && that can trigger extra approval).
+- Do not invent a repository-local openwiki/ path unless this is a code-mode run rooted in that repository.`;
+  }
+
+  return `${label}:
+${cwd}
+
+Runtime note (DeepAgents / virtual filesystem):
+- ${formatVirtualRootInstruction(outputMode)}
+- Do not pass host absolute paths to filesystem tools. A host absolute path will be treated as a virtual path and will write to the wrong location.
+- Shell execute commands run on the host. For execute, use cd ${cwd} before commands that should run against this root.
+- Do not search parent directories or unrelated directories.`;
+}
+
+function formatRealFsRootInstruction(outputMode: OpenWikiOutputMode): string {
+  if (outputMode === "local-wiki") {
+    return "Your process working directory is the local personal wiki root above (~/.openwiki/wiki). Write wiki pages with paths relative to that root (quickstart.md, topics/…, sources/…). Do not create a nested openwiki/ directory inside the wiki. Do not look for a repository-local openwiki/ folder under the user's launch directory unless they explicitly ask about code-mode docs.";
+  }
+
+  return "Your process working directory is the target repository root. Write generated docs under openwiki/ (for example openwiki/quickstart.md). Treat the repository as source evidence; do not rewrite application source.";
+}
+
+function formatVirtualRootInstruction(outputMode: OpenWikiOutputMode): string {
+  if (outputMode === "local-wiki") {
+    return "Filesystem tools use a virtual root: / means the local wiki directory above. Write wiki pages directly under /, for example /quickstart.md, /sources/gmail.md, and /_plan.md. Do not create a nested /openwiki directory.";
+  }
+
+  return "Filesystem tools use a virtual root: / means the repository root. Write generated wiki pages under /openwiki (for example /openwiki/quickstart.md); treat the rest of the repository as source evidence only and do not rewrite application source.";
 }
 
 function formatWikiGoal(wikiGoal: string | undefined): string {
