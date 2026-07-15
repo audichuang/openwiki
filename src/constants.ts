@@ -552,16 +552,24 @@ export function getProviderCredentialHint(
  * instead of an API-key environment variable.
  */
 export function formatProviderSwitchNotice(provider: OpenWikiProvider): string {
-  const switched = `Provider switched to ${getProviderLabel(provider)} with model ${getDefaultModelId(provider)}.`;
+  // Providers with no preset models (bedrock, openai-compatible) have no
+  // meaningful default; naming one would surface the unrelated OpenAI fallback
+  // id (DEFAULT_MODEL_ID). Prompt for an explicit model instead.
+  const hasModelPreset = getProviderModelOptions(provider).length > 0;
+  const modelPart = hasModelPreset
+    ? ` with model ${getDefaultModelId(provider)}`
+    : "";
+  const switched = `Provider switched to ${getProviderLabel(provider)}${modelPart}.`;
+  const modelHint = hasModelPreset ? "" : " Set a model with /model.";
 
   if (isAgentCliProvider(provider)) {
-    return `${switched} Runs use the local agent CLI login.`;
+    return `${switched}${modelHint} Runs use the local agent CLI login.`;
   }
 
   const apiKeyEnvKey = getProviderApiKeyEnvKey(provider);
 
   if (apiKeyEnvKey) {
-    return `${switched} Ensure ${apiKeyEnvKey} is set.`;
+    return `${switched}${modelHint} Ensure ${apiKeyEnvKey} is set.`;
   }
 
   const projectEnvKey = getProviderProjectEnvKey(provider);
@@ -570,7 +578,7 @@ export function formatProviderSwitchNotice(provider: OpenWikiProvider): string {
     ? `Ensure ${projectEnvKey} is set.`
     : "Ensure provider credentials are set.";
 
-  return `${switched} ${requirement}${hint ? ` ${hint}` : ""}`;
+  return `${switched}${modelHint} ${requirement}${hint ? ` ${hint}` : ""}`;
 }
 
 /**

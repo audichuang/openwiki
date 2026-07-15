@@ -90,4 +90,15 @@ describe("formatProviderSwitchNotice", () => {
     expect(notice).not.toContain("_API_KEY");
     expect(notice).toContain("login");
   });
+
+  test("providers without preset models prompt for a model, not a bogus default", () => {
+    const notice = formatProviderSwitchNotice("bedrock");
+
+    expect(notice).toContain("Provider switched to AWS Bedrock");
+    expect(notice).toContain("Set a model with /model");
+    // Must not present the OpenAI fallback default id as Bedrock's model.
+    expect(notice).not.toContain("with model");
+    expect(notice).not.toContain(getDefaultModelId("openai"));
+    expect(notice).toContain("Ensure BEDROCK_AWS_ACCESS_KEY_ID is set.");
+  });
 });

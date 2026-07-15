@@ -49,6 +49,25 @@ process.stdin.on("end", () => {
 });
 `;
 
+// Writes docs, then reports a failure result and exits non-zero — models a
+// vendor CLI that dies late after already changing the wiki on disk.
+const FAILING_AFTER_WRITE_STUB = `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+if (process.argv.includes("--version")) {
+  console.log("0.0.0-stub");
+  process.exit(0);
+}
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
+  mkdirSync("openwiki", { recursive: true });
+  writeFileSync("openwiki/quickstart.md", "# Partial docs\\n");
+  console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "stub-session" }));
+  console.log(JSON.stringify({ type: "result", subtype: "error", is_error: true, result: "boom" }));
+  process.exit(1);
+});
+`;
+
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd });
   return stdout.trim();
@@ -113,6 +132,29 @@ describe("runOpenWikiAgent with an agent-cli provider", () => {
     );
     expect(docs).toContain("Stub docs");
 
+    const metadata = JSON.parse(
+      await readFile(path.join(repo, "openwiki", ".last-update.json"), "utf8"),
+    ) as { command: string; model: string };
+    expect(metadata.command).toBe("init");
+    expect(metadata.model).toBe("default");
+  }, 30_000);
+
+  test("persists metadata when the CLI fails after writing docs", async () => {
+    const repo = await createFixtureRepo();
+    const failStubDir = await mkdtemp(
+      path.join(tmpdir(), "openwiki-fail-stub-"),
+    );
+    const failStubPath = path.join(failStubDir, "fail-stub.mjs");
+    await writeFile(failStubPath, FAILING_AFTER_WRITE_STUB, "utf8");
+    await chmod(failStubPath, 0o755);
+    process.env[CLAUDE_CODE_BINARY_ENV_KEY] = failStubPath;
+
+    await expect(
+      runOpenWikiAgent("init", repo, { outputMode: "repo-docs" }),
+    ).rejects.toThrow();
+
+    // The failed run left changed content, so metadata must still be written
+    // (mirrors the API path) — otherwise the next update diffs from a stale base.
     const metadata = JSON.parse(
       await readFile(path.join(repo, "openwiki", ".last-update.json"), "utf8"),
     ) as { command: string; model: string };

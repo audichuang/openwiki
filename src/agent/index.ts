@@ -394,7 +394,7 @@ async function runAgentCliRun(
   modelId: string,
 ): Promise<OpenWikiRunResult> {
   const prepared = await prepareAgentRun(command, cwd, options);
-  const { context, outputMode, threadId } = prepared;
+  const { context, openWikiSnapshotBefore, outputMode, threadId } = prepared;
   const resumeSessionId =
     options.isFollowup === true ? getThreadSessionId(threadId) : undefined;
 
@@ -430,12 +430,35 @@ async function runAgentCliRun(
     additionalDirs,
   };
 
-  const outcome = await runAgentCli(
-    getAgentCliAdapter(provider),
-    getAgentCliProviderConfig(provider),
-    spec,
-    options,
-  );
+  let outcome;
+  try {
+    outcome = await runAgentCli(
+      getAgentCliAdapter(provider),
+      getAgentCliProviderConfig(provider),
+      spec,
+      options,
+    );
+  } catch (error) {
+    // Mirror the API path: persist metadata even when the CLI fails late, so
+    // content it already wrote to disk stays diffable by future updates.
+    try {
+      const metadataWritten = await persistRunMetadataIfChanged(
+        command,
+        cwd,
+        modelId,
+        outputMode,
+        openWikiSnapshotBefore,
+      );
+      emitDebug(
+        options,
+        metadataWritten ? "metadata=written" : "metadata=skipped",
+      );
+    } catch {
+      emitDebug(options, "metadata=writeFailed");
+    }
+
+    throw error;
+  }
 
   if (outcome.sessionId) {
     setThreadSessionId(threadId, outcome.sessionId);
