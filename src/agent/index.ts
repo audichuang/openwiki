@@ -1158,7 +1158,10 @@ function extractContentDeltaText(delta: unknown, seen: Set<object>): string {
   return "";
 }
 
-function extractContentBlockText(block: unknown, seen: Set<object>): string {
+export function extractContentBlockText(
+  block: unknown,
+  seen: Set<object>,
+): string {
   if (typeof block === "string") {
     return block;
   }
@@ -1169,7 +1172,12 @@ function extractContentBlockText(block: unknown, seen: Set<object>): string {
 
   const type = getStringRecordValue(block, "type");
 
-  if (type?.includes("tool") || type?.includes("reasoning")) {
+  if (
+    type?.includes("tool") ||
+    type?.includes("reasoning") ||
+    type?.includes("file") ||
+    type?.includes("image")
+  ) {
     return "";
   }
 
