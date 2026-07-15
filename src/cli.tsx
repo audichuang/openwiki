@@ -124,6 +124,8 @@ type RunLogItem = {
   call?: string;
   doneContent?: string;
   errorCount?: number;
+  /** Tool names that ended with status=error in this group (for UI summary). */
+  failedToolNames?: string[];
   id: number;
   latestDoneContent?: string;
   status?: "done" | "error" | "running";
@@ -2664,6 +2666,7 @@ function appendToolStartLogItem(
         actionCount,
         errorCount,
         latestDoneContent,
+        previous.failedToolNames,
       ),
       errorCount,
       latestDoneContent,
@@ -2717,6 +2720,10 @@ function completeToolGroupItem(
   const activeToolCallIds = getActiveToolCallIds(item).filter(
     (id) => id !== event.id,
   );
+  const failedToolNames =
+    event.status === "error"
+      ? [...(item.failedToolNames ?? []), event.name]
+      : (item.failedToolNames ?? []);
   const errorCount =
     (item.errorCount ?? 0) + (event.status === "error" ? 1 : 0);
   const latestDoneContent = item.latestDoneContent ?? item.doneContent;
@@ -2731,8 +2738,10 @@ function completeToolGroupItem(
         actionCount,
         errorCount,
         latestDoneContent,
+        failedToolNames,
       ),
       errorCount,
+      failedToolNames,
       status: "running",
     };
   }
@@ -2741,13 +2750,20 @@ function completeToolGroupItem(
     ...item,
     activeToolCallIds,
     call: undefined,
-    content: formatToolGroupDone(actionCount, errorCount, latestDoneContent),
+    content: formatToolGroupDone(
+      actionCount,
+      errorCount,
+      latestDoneContent,
+      failedToolNames,
+    ),
     doneContent: formatToolGroupDone(
       actionCount,
       errorCount,
       latestDoneContent,
+      failedToolNames,
     ),
     errorCount,
+    failedToolNames,
     status: errorCount > 0 ? "error" : "done",
   };
 }
@@ -2802,6 +2818,7 @@ function formatToolGroupDone(
   actionCount: number,
   errorCount: number,
   latestDoneContent?: string,
+  failedToolNames?: string[],
 ): string {
   if (actionCount <= 1 && errorCount === 0) {
     return latestDoneContent ?? "Ran 1 action";
@@ -2812,7 +2829,7 @@ function formatToolGroupDone(
       errorCount,
       "failure",
       "failures",
-    )}`;
+    )}${formatFailedToolNames(failedToolNames)}`;
   }
 
   return `Ran ${formatCount(actionCount, "action", "actions")}`;
@@ -2823,6 +2840,18 @@ type ToolDisplay = {
   running: string;
   showDetail: boolean;
 };
+
+/** Optional list of failed tool names for richer done summaries. */
+function formatFailedToolNames(names: string[] | undefined): string {
+  if (!names || names.length === 0) {
+    return "";
+  }
+
+  const unique = [...new Set(names)];
+  const preview = unique.slice(0, 3).join(", ");
+  const more = unique.length > 3 ? ` (+${unique.length - 3} more)` : "";
+  return ` [${preview}${more}]`;
+}
 
 function createToolDisplay(
   event: Extract<OpenWikiRunEvent, { type: "tool_start" }>,

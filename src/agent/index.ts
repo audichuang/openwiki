@@ -398,6 +398,11 @@ async function runAgentCliRun(
   // CLIs (Grok Build) let the runner concatenate them into the prompt file.
   const systemPrompt = createSystemPrompt(command, outputMode, "agent-cli");
   const prompt = createRunUserMessage(command, cwd, context, options);
+  // Personal runs must spawn inside ~/.openwiki/wiki so Claude Code's sandbox
+  // can list/edit wiki pages. When the user launched OpenWiki from another
+  // directory (e.g. a multi-repo workspace), pass that path as --add-dir so
+  // source notes like docs/etf_doc/* remain readable.
+  const additionalDirs = resolveAgentCliAdditionalDirs(cwd, outputMode);
   const spec: EngineRunSpec = {
     command,
     cwd,
@@ -405,6 +410,7 @@ async function runAgentCliRun(
     prompt,
     systemPrompt,
     resumeSessionId,
+    additionalDirs,
   };
 
   const outcome = await runAgentCli(
@@ -438,22 +444,20 @@ function createRunUserMessage(
     return options.userMessage.trim();
   }
 
-  return `
-${createUserPrompt(
-  command,
-  context,
-  options.userMessage ?? null,
-  options.outputMode ?? "local-wiki",
-)}
+  const outputMode = options.outputMode ?? "local-wiki";
 
-${formatRuntimeRootLabel(options.outputMode ?? "local-wiki")}:
+  return `
+${createUserPrompt(command, context, options.userMessage ?? null, outputMode)}
+
+${formatRuntimeRootLabel(outputMode)}:
 ${cwd}
 
-Runtime note:
-- ${formatRuntimeRootInstruction(options.outputMode ?? "local-wiki")}
-- Do not pass host absolute paths to filesystem tools. A host absolute path will be treated as a virtual path and will write to the wrong location.
-- Shell execute commands run on the host. For execute, use cd ${cwd} before commands that should run against this root.
-- Do not search parent directories or unrelated directories.
+Runtime note (agent-CLI / real filesystem):
+- ${formatRuntimeRootInstruction(outputMode)}
+- Prefer paths relative to the working directory above.
+- Absolute paths are allowed when reading evidence outside the run root (for example a user note under a workspace that was passed via --add-dir).
+- Prefer Read/Glob/Grep/LS tools over Bash when possible. If using Bash, keep commands single-purpose (avoid chaining with && that can trigger extra approval).
+- Do not invent a repository-local openwiki/ path unless this is a code-mode run rooted in that repository.
 `.trim();
 }
 
@@ -463,10 +467,31 @@ function formatRuntimeRootLabel(outputMode: OpenWikiOutputMode): string {
 
 function formatRuntimeRootInstruction(outputMode: OpenWikiOutputMode): string {
   if (outputMode === "local-wiki") {
-    return "Filesystem tools use a virtual root: / means the local wiki directory above. Write wiki pages directly under /, for example /quickstart.md, /sources/gmail.md, and /_plan.md. Do not create a nested /openwiki directory.";
+    return "Your process working directory is the local personal wiki root above (~/.openwiki/wiki). Write wiki pages with paths relative to that root (quickstart.md, topics/…, sources/…). Do not create a nested openwiki/ directory inside the wiki. Do not look for a repository-local openwiki/ folder under the user's launch directory unless they explicitly ask about code-mode docs.";
   }
 
-  return "Treat the repository root above as source evidence only. The canonical generated wiki is ~/.openwiki/wiki, not a repository-local openwiki/ directory. Filesystem tools use a virtual root: / means the repository root for source inspection paths such as /README.md, /agent/agents/main.py, and /package.json.";
+  return "Your process working directory is the target repository root. Write generated docs under openwiki/ (for example openwiki/quickstart.md). Treat the repository as source evidence; do not rewrite application source.";
+}
+
+/**
+ * Extra readable dirs for agent-CLI sandboxes (Claude Code --add-dir).
+ * Personal wiki runs often need both the wiki root and the directory the user
+ * launched from (where workspace notes / multi-repo checkouts live).
+ */
+function resolveAgentCliAdditionalDirs(
+  runCwd: string,
+  outputMode: OpenWikiOutputMode,
+): string[] | undefined {
+  if (outputMode !== "local-wiki") {
+    return undefined;
+  }
+
+  const launchCwd = process.cwd();
+  if (path.resolve(launchCwd) === path.resolve(runCwd)) {
+    return undefined;
+  }
+
+  return [launchCwd];
 }
 
 async function createCheckpointer(

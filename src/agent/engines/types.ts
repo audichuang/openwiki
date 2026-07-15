@@ -22,6 +22,12 @@ export type EngineRunSpec = {
    * Code may use `default` / `sonnet` / `opus` / `haiku`.
    */
   modelId: string;
+  /**
+   * Extra host directories the vendor CLI may read (for example the user's
+   * launch cwd when the run root is ~/.openwiki/wiki). Claude Code maps these
+   * to `--add-dir`.
+   */
+  additionalDirs?: string[];
 };
 
 export type AgentCliEvent =

@@ -54,6 +54,27 @@ describe("claudeCodeAdapter.buildArgs", () => {
     expect(args[args.indexOf("--resume") + 1]).toBe("sess-1");
   });
 
+  test("passes --add-dir for additional evidence directories", () => {
+    const args = claudeCodeAdapter.buildArgs(
+      {
+        ...baseSpec,
+        additionalDirs: ["/Users/audi/GoogleDrive/cat"],
+      },
+      null,
+    );
+
+    expect(args[args.indexOf("--add-dir") + 1]).toBe(
+      "/Users/audi/GoogleDrive/cat",
+    );
+  });
+
+  test("allows read-only bash discovery helpers", () => {
+    const tools = CLAUDE_CODE_ALLOWED_TOOLS.split(",");
+    expect(tools).toContain("Bash(ls:*)");
+    expect(tools).toContain("Bash(find:*)");
+    expect(tools).toContain("Bash(rg:*)");
+  });
+
   test("allowed tools stay documentation-shaped", () => {
     const tools = CLAUDE_CODE_ALLOWED_TOOLS.split(",");
 

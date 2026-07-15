@@ -30,6 +30,13 @@ export const CLAUDE_CODE_ALLOWED_TOOLS = [
   "Write",
   "Edit",
   "MultiEdit",
+  // Read-only host discovery for docs evidence (still no network tools).
+  "Bash(ls:*)",
+  "Bash(find:*)",
+  "Bash(head:*)",
+  "Bash(cat:*)",
+  "Bash(rg:*)",
+  "Bash(wc:*)",
   "Bash(git log:*)",
   "Bash(git show:*)",
   "Bash(git diff:*)",
@@ -37,6 +44,7 @@ export const CLAUDE_CODE_ALLOWED_TOOLS = [
   "Bash(git blame:*)",
   "Bash(git rev-parse:*)",
   "Bash(rm -f openwiki/_plan.md)",
+  "Bash(rm -f ./_plan.md)",
 ].join(",");
 
 export const claudeCodeAdapter: AgentCliAdapter = {
@@ -69,6 +77,12 @@ export const claudeCodeAdapter: AgentCliAdapter = {
       "--allowedTools",
       CLAUDE_CODE_ALLOWED_TOOLS,
     ];
+
+    for (const dir of spec.additionalDirs ?? []) {
+      if (dir.trim().length > 0) {
+        args.push("--add-dir", dir);
+      }
+    }
 
     if (spec.modelId !== "default" && spec.modelId.length > 0) {
       args.push("--model", spec.modelId);
