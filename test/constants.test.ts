@@ -10,6 +10,8 @@ import {
   getProviderModelOptions,
   getProviderRegionEnvKey,
   getProviderSecretKeyEnvKey,
+  getProvidersForKnownModelId,
+  isModelIdForOtherProvider,
   isValidBaseUrl,
   isValidModelId,
   isValidProvider,
@@ -345,4 +347,65 @@ describe("getDefaultModelId", () => {
       expect(getDefaultModelId("openai-compatible")).toBe(DEFAULT_MODEL_ID);
     },
   );
+});
+
+describe("getProvidersForKnownModelId", () => {
+  test("finds the provider(s) whose known models include the id", () => {
+    expect(getProvidersForKnownModelId("claude-opus-4-8", "openai")).toEqual([
+      "anthropic",
+    ]);
+  });
+
+  test("excludes the provider passed in", () => {
+    expect(getProvidersForKnownModelId("claude-opus-4-8", "anthropic")).toEqual(
+      [],
+    );
+  });
+
+  test("returns empty for custom / unknown model ids", () => {
+    expect(
+      getProvidersForKnownModelId("my-gateway-model", "openai-compatible"),
+    ).toEqual([]);
+  });
+});
+
+describe("isModelIdForOtherProvider", () => {
+  test("flags a model that clearly belongs to a different provider", () => {
+    expect(isModelIdForOtherProvider("claude-opus-4-8", "openai")).toBe(true);
+  });
+
+  test("does not flag a model valid for the configured provider", () => {
+    expect(isModelIdForOtherProvider("claude-opus-4-8", "anthropic")).toBe(
+      false,
+    );
+  });
+
+  test("does not flag shared OpenAI models across openai / openai-chatgpt", () => {
+    const [firstOpenAiModel] = getProviderModelOptions("openai");
+    if (firstOpenAiModel) {
+      expect(
+        isModelIdForOtherProvider(firstOpenAiModel.id, "openai-chatgpt"),
+      ).toBe(false);
+    }
+  });
+
+  test("does not flag agent-cli model aliases (opus, default, grok-4.5)", () => {
+    // Regression guard for our fork: agent-cli providers reuse short aliases
+    // that must stay known to their own provider, not trip the mismatch warn.
+    expect(isModelIdForOtherProvider("opus", "claude-code")).toBe(false);
+    expect(isModelIdForOtherProvider("default", "claude-code")).toBe(false);
+    expect(isModelIdForOtherProvider("grok-4.5", "grok-build")).toBe(false);
+  });
+
+  test("does not flag custom / unknown model ids", () => {
+    expect(
+      isModelIdForOtherProvider("my-gateway-model", "openai-compatible"),
+    ).toBe(false);
+  });
+
+  test("trims whitespace before comparing", () => {
+    expect(isModelIdForOtherProvider("  claude-opus-4-8  ", "openai")).toBe(
+      true,
+    );
+  });
 });
