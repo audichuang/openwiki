@@ -202,7 +202,37 @@ notes.
 
 ## Customizing
 
-OpenWiki supports OpenAI (with an API key or a ChatGPT login), OpenRouter, Gemini (AI Studio), Gemini Enterprise (Vertex AI), Nebius Token Factory, Fireworks, Baseten, NVIDIA NIM, an OpenAI-compatible provider, AWS Bedrock, and Anthropic out of the box. The onboarding default is OpenAI with `gpt-5.6-terra`, and each inference provider also includes pre-defined model options plus support for custom model IDs.
+OpenWiki supports OpenAI (with an API key or a ChatGPT login), Grok Build (subscription CLI), Claude Code (subscription CLI), OpenRouter, Gemini (AI Studio), Gemini Enterprise (Vertex AI), Nebius Token Factory, Fireworks, Baseten, NVIDIA NIM, an OpenAI-compatible provider, AWS Bedrock, and Anthropic out of the box. The onboarding default is OpenAI with `gpt-5.6-terra`, and each inference provider also includes pre-defined model options plus support for custom model IDs.
+
+### Use your coding-agent subscription (no API key)
+
+If you already pay for a subscription coding agent, OpenWiki can delegate
+documentation runs to it instead of calling a metered API. Supported agents
+include Claude Code and Grok Build:
+
+```bash
+OPENWIKI_PROVIDER=claude-code
+OPENWIKI_MODEL_ID=default   # or sonnet / opus / haiku
+
+# or
+OPENWIKI_PROVIDER=grok-build
+OPENWIKI_MODEL_ID=grok-4.5
+```
+
+Requirements and notes:
+
+- Install the vendor CLI and complete its subscription login once
+  (`claude` / `grok login`).
+- No API key is stored. Runs execute through the vendor CLI in headless mode
+  with a documentation-scoped tool allowlist, using your existing login.
+- Set `OPENWIKI_CLAUDE_CODE_BINARY` / `OPENWIKI_GROK_BUILD_BINARY` to point at a
+  non-default binary location, and `OPENWIKI_AGENT_CLI_TIMEOUT_SECONDS` to
+  change the 30-minute run timeout.
+- Local runs only for now: the scheduled GitHub Action still needs an API-key
+  provider.
+- LangSmith tracing does not apply to delegated runs.
+- macOS and Linux only for now: process-group management and binary
+  resolution for agent-CLI providers are POSIX-specific.
 
 ### Alternative base URLs
 
@@ -339,6 +369,47 @@ For CI, authenticate before the update job runs — for example with
 environment.
 
 Base URLs (and all credentials) can be set in your environment or stored in `~/.openwiki/.env`.
+
+### Grok Build (subscription)
+
+The `grok-build` provider runs documentation jobs through the local [Grok Build](https://grok.com)
+CLI (`grok`) using your Grok subscription login — no xAI API key required. OpenWiki
+spawns `grok` headlessly with `--always-approve` and `--output-format streaming-json`,
+and model usage draws on the same session as interactive Grok Build.
+
+Prerequisites:
+
+1. Install the Grok Build CLI and ensure `grok` is on your `PATH` (or set
+   `OPENWIKI_GROK_BUILD_BINARY` to the full path).
+2. Run `grok login` once so the CLI has a valid subscription session.
+
+```bash
+OPENWIKI_PROVIDER=grok-build openwiki code --init
+# or
+OPENWIKI_PROVIDER=grok-build openwiki personal --init
+```
+
+Optional overrides:
+
+```bash
+# Binary path when `grok` is not on PATH
+OPENWIKI_GROK_BUILD_BINARY=/path/to/grok
+
+# Model (defaults to grok-4.5)
+OPENWIKI_MODEL_ID=grok-4.5
+
+# Max agent turns for a documentation run (default 50)
+OPENWIKI_GROK_BUILD_MAX_TURNS=50
+
+# Overall run timeout in seconds (default 1800)
+OPENWIKI_AGENT_CLI_TIMEOUT_SECONDS=1800
+```
+
+**Local / subscription only.** Prefer this provider on a machine where you already
+use Grok Build interactively. It is not a drop-in for the scheduled GitHub Actions
+or GitLab CI examples, which expect a metered API key and do not have a `grok login`
+session. Runs use `--always-approve` so the CLI can write documentation files;
+treat the model like any coding agent with write access to the repo.
 
 ### Provider retry attempts
 
