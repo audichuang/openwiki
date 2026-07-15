@@ -6,6 +6,7 @@ import {
   getDefaultModelId,
   getProviderApiKeyEnvKey,
   getProviderLabel,
+  getProviderLoginCommand,
   isAgentCliProvider,
   isValidModelId,
   normalizeProvider,
@@ -69,6 +70,17 @@ describe("agent-cli provider kinds", () => {
     expect(diagnostics.map((diagnostic) => diagnostic.key)).toContain(
       CLAUDE_CODE_BINARY_ENV_KEY,
     );
+  });
+});
+
+describe("getProviderLoginCommand", () => {
+  test("returns each agent-cli provider's own login command", () => {
+    expect(getProviderLoginCommand("claude-code")).toBe("claude");
+    expect(getProviderLoginCommand("grok-build")).toBe("grok login");
+  });
+
+  test("claude-code must not tell users to run grok login", () => {
+    expect(getProviderLoginCommand("claude-code")).not.toContain("grok");
   });
 });
 

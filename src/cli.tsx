@@ -69,6 +69,7 @@ import {
   getProviderApiKeyEnvKey,
   getProviderCredentialHint,
   getProviderLabel,
+  getProviderLoginCommand,
   getProviderModelOptions,
   getProviderProjectEnvKey,
   isAgentCliProvider,
@@ -1787,7 +1788,7 @@ function ChatInput({
     if (option.id === "api-key") {
       if (isAgentCliProvider(currentProvider)) {
         setError(
-          `${getProviderLabel(currentProvider)} uses the local Grok Build CLI login. Run \`grok login\` instead of pasting an API key.`,
+          `${getProviderLabel(currentProvider)} uses a local CLI login. Run \`${getProviderLoginCommand(currentProvider)}\` instead of pasting an API key.`,
         );
         return;
       }

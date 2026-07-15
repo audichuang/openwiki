@@ -15,6 +15,7 @@ import {
   getProviderBaseUrlEnvKey,
   getProviderLabel,
   getProviderLocationEnvKey,
+  getProviderLoginCommand,
   getProviderModelOptions,
   getProviderProjectEnvKey,
   getProviderRegionEnvKey,
@@ -490,7 +491,7 @@ function getCredentialSetupDetail(
   tokens: CodexTokens | null = null,
 ): string {
   if (isAgentCliProvider(provider)) {
-    return "uses local Grok Build CLI login (`grok login`)";
+    return `uses your local ${getProviderLabel(provider)} login (run \`${getProviderLoginCommand(provider)}\`)`;
   }
 
   if (providerUsesOAuth(provider)) {

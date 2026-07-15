@@ -192,6 +192,12 @@ export type AgentCliProviderConfig = {
   defaultBinary: string;
   /** Shown when the binary is missing or not logged in. */
   installHint: string;
+  /**
+   * Command the user runs to establish the vendor CLI subscription login
+   * (for example `claude` or `grok login`). Differs per vendor, so onboarding
+   * copy must read it from here instead of hardcoding one CLI's command.
+   */
+  loginCommand: string;
   label: string;
   modelOptions: ProviderModelOption[];
 };
@@ -265,6 +271,7 @@ export const PROVIDER_CONFIGS: Record<OpenWikiProvider, ProviderConfig> = {
     defaultBinary: "claude",
     installHint:
       "Install Claude Code (npm install -g @anthropic-ai/claude-code), then run `claude` once and complete the subscription login.",
+    loginCommand: "claude",
     label: "Claude Code (subscription)",
     modelOptions: [
       { id: "default", label: "Subscription default" },
@@ -279,6 +286,7 @@ export const PROVIDER_CONFIGS: Record<OpenWikiProvider, ProviderConfig> = {
     defaultBinary: "grok",
     installHint:
       "Install the Grok Build CLI, then run `grok login` so OpenWiki can use your subscription session.",
+    loginCommand: "grok login",
     label: "Grok Build (subscription)",
     modelOptions: [
       { id: "grok-4.5", label: "Grok 4.5" },
@@ -411,6 +419,11 @@ export function getAgentCliProviderConfig(
   }
 
   return config;
+}
+
+/** The vendor CLI subscription-login command for an agent-cli provider. */
+export function getProviderLoginCommand(provider: OpenWikiProvider): string {
+  return getAgentCliProviderConfig(provider).loginCommand;
 }
 
 function getApiProviderConfig(provider: OpenWikiProvider): ApiProviderConfig {
