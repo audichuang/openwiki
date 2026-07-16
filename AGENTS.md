@@ -48,7 +48,7 @@ Full structure: use the repo tree / search; do not maintain a second inventory h
 
 ## Branch status — `feat/agent-cli-grok-and-claude`
 
-Local integration of two upstream PRs that are still **open** and each conflict with `main`; kept rebased on latest `main`.
+Local integration of two upstream PRs that are still **open** and each conflict with `main`; kept rebased on latest `main`. Full divergence log + PR disposition: [FORK-NOTES.md](FORK-NOTES.md).
 
 | Upstream PR                                               | Adds                                           |
 | --------------------------------------------------------- | ---------------------------------------------- |
