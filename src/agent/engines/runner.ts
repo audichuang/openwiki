@@ -13,8 +13,6 @@ const STDERR_TAIL_LIMIT = 4000;
 
 type RunResult = { ok: boolean; errorMessage?: string } | null;
 
-const threadSessionIds = new Map<string, string>();
-
 // Detached agent-CLI children live in their own process group so the timeout
 // path can kill the whole group with `process.kill(-pid)`. Track live group
 // leaders so exit/signal handlers can clean them up if the parent dies mid-run.
@@ -65,14 +63,6 @@ function registerCleanupHandlersOnce(): void {
 
     process.on(signal, onSignal);
   }
-}
-
-export function getThreadSessionId(threadId: string): string | undefined {
-  return threadSessionIds.get(threadId);
-}
-
-export function setThreadSessionId(threadId: string, sessionId: string): void {
-  threadSessionIds.set(threadId, sessionId);
 }
 
 export type AgentCliRunOutcome = {

@@ -35,11 +35,12 @@ import {
   refreshChatGptTokens,
 } from "./openai-chatgpt-oauth.js";
 import { getAgentCliAdapter } from "./engines/index.js";
+import { runAgentCli } from "./engines/runner.js";
 import {
+  clearThreadSessionId,
   getThreadSessionId,
-  runAgentCli,
   setThreadSessionId,
-} from "./engines/runner.js";
+} from "./engines/session-store.js";
 import type { EngineRunSpec } from "./engines/types.js";
 import {
   createRuntimeNote,
@@ -388,6 +389,33 @@ async function runOpenWikiAgentCore(
   return finalizeAgentRun(command, cwd, modelId, options, prepared);
 }
 
+// Persist run metadata after an agent-CLI failure, mirroring the API path, so
+// content a failed run already wrote to disk stays diffable by future updates.
+async function persistAgentRunFailureMetadata(
+  command: OpenWikiCommand,
+  cwd: string,
+  modelId: string,
+  outputMode: OpenWikiOutputMode,
+  snapshotBefore: string | null,
+  options: OpenWikiRunOptions,
+): Promise<void> {
+  try {
+    const metadataWritten = await persistRunMetadataIfChanged(
+      command,
+      cwd,
+      modelId,
+      outputMode,
+      snapshotBefore,
+    );
+    emitDebug(
+      options,
+      metadataWritten ? "metadata=written" : "metadata=skipped",
+    );
+  } catch {
+    emitDebug(options, "metadata=writeFailed");
+  }
+}
+
 async function runAgentCliRun(
   command: OpenWikiCommand,
   cwd: string,
@@ -398,7 +426,9 @@ async function runAgentCliRun(
   const prepared = await prepareAgentRun(command, cwd, options);
   const { context, openWikiSnapshotBefore, outputMode, threadId } = prepared;
   const resumeSessionId =
-    options.isFollowup === true ? getThreadSessionId(threadId) : undefined;
+    options.isFollowup === true
+      ? getThreadSessionId(threadId, provider)
+      : undefined;
 
   if (resumeSessionId) {
     emitDebug(options, `engine.resume session=${resumeSessionId}`);
@@ -441,29 +471,47 @@ async function runAgentCliRun(
       options,
     );
   } catch (error) {
-    // Mirror the API path: persist metadata even when the CLI fails late, so
-    // content it already wrote to disk stays diffable by future updates.
-    try {
-      const metadataWritten = await persistRunMetadataIfChanged(
+    if (resumeSessionId) {
+      // A stale/expired session id fails the whole run. Drop it and retry once
+      // with a fresh session so a follow-up isn't permanently wedged.
+      emitDebug(options, "engine.resume=failed retry=fresh");
+      clearThreadSessionId(threadId);
+
+      try {
+        outcome = await runAgentCli(
+          getAgentCliAdapter(provider),
+          getAgentCliProviderConfig(provider),
+          { ...spec, resumeSessionId: undefined },
+          options,
+        );
+      } catch (retryError) {
+        await persistAgentRunFailureMetadata(
+          command,
+          cwd,
+          modelId,
+          outputMode,
+          openWikiSnapshotBefore,
+          options,
+        );
+
+        throw retryError;
+      }
+    } else {
+      await persistAgentRunFailureMetadata(
         command,
         cwd,
         modelId,
         outputMode,
         openWikiSnapshotBefore,
-      );
-      emitDebug(
         options,
-        metadataWritten ? "metadata=written" : "metadata=skipped",
       );
-    } catch {
-      emitDebug(options, "metadata=writeFailed");
-    }
 
-    throw error;
+      throw error;
+    }
   }
 
   if (outcome.sessionId) {
-    setThreadSessionId(threadId, outcome.sessionId);
+    setThreadSessionId(threadId, provider, outcome.sessionId);
   }
 
   return finalizeAgentRun(command, cwd, modelId, options, prepared);

@@ -68,6 +68,29 @@ process.stdin.on("end", () => {
 });
 `;
 
+// Records whether each invocation carried --resume; fails when it did (models a
+// stale/expired session id) and succeeds on a fresh session otherwise.
+const RESUME_FALLBACK_STUB = `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+if (process.argv.includes("--version")) {
+  console.log("0.0.0-stub");
+  process.exit(0);
+}
+const hasResume = process.argv.includes("--resume");
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
+  appendFileSync("stub-calls.json", JSON.stringify({ resume: hasResume }) + "\\n");
+  if (hasResume) {
+    console.log(JSON.stringify({ type: "result", subtype: "error", is_error: true, result: "stale session" }));
+    process.exit(1);
+  }
+  console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "fresh-session" }));
+  console.log(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "ok" }] } }));
+  console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "done" }));
+});
+`;
+
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd });
   return stdout.trim();
@@ -87,6 +110,7 @@ async function createFixtureRepo(): Promise<string> {
 const ENV_KEYS = [
   "OPENWIKI_PROVIDER",
   "OPENWIKI_MODEL_ID",
+  "OPENWIKI_CLI_SESSIONS_PATH",
   CLAUDE_CODE_BINARY_ENV_KEY,
 ];
 const savedEnv: Record<string, string | undefined> = {};
@@ -104,6 +128,11 @@ beforeEach(async () => {
   process.env.OPENWIKI_PROVIDER = "claude-code";
   process.env.OPENWIKI_MODEL_ID = "default";
   process.env[CLAUDE_CODE_BINARY_ENV_KEY] = stubPath;
+  // Keep the persistent CLI session store out of the real ~/.openwiki.
+  process.env.OPENWIKI_CLI_SESSIONS_PATH = path.join(
+    stubDir,
+    "cli-sessions.json",
+  );
 });
 
 afterEach(() => {
@@ -160,6 +189,44 @@ describe("runOpenWikiAgent with an agent-cli provider", () => {
     ) as { command: string; model: string };
     expect(metadata.command).toBe("init");
     expect(metadata.model).toBe("default");
+  }, 30_000);
+
+  test("resume failure falls back to a fresh session instead of failing", async () => {
+    const repo = await createFixtureRepo();
+    const stubDir = await mkdtemp(path.join(tmpdir(), "openwiki-resume-fb-"));
+    const stubPath = path.join(stubDir, "resume-fallback.mjs");
+    await writeFile(stubPath, RESUME_FALLBACK_STUB, "utf8");
+    await chmod(stubPath, 0o755);
+    process.env[CLAUDE_CODE_BINARY_ENV_KEY] = stubPath;
+
+    // First run (no resume) establishes and stores a session.
+    await runOpenWikiAgent("chat", repo, {
+      outputMode: "repo-docs",
+      threadId: "t1",
+      userMessage: "hello",
+    });
+
+    // Follow-up resumes; the stub rejects --resume, so the run must retry with
+    // a fresh session rather than throwing.
+    const result = await runOpenWikiAgent("chat", repo, {
+      outputMode: "repo-docs",
+      threadId: "t1",
+      isFollowup: true,
+      userMessage: "again",
+    });
+    expect(result.command).toBe("chat");
+
+    const calls = (await readFile(path.join(repo, "stub-calls.json"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { resume: boolean });
+
+    // 1st run (fresh) → follow-up resume attempt (fails) → fresh retry.
+    expect(calls).toEqual([
+      { resume: false },
+      { resume: true },
+      { resume: false },
+    ]);
   }, 30_000);
 
   test("chat run does not write update metadata", async () => {
