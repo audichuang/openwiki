@@ -35,41 +35,24 @@ pnpm link --global        # optional: use local openwiki on PATH
 
 ## Where to start (judgment, not a file tree)
 
-| Concern                  | Start here                                                         |
-| ------------------------ | ------------------------------------------------------------------ |
-| CLI / modes / `--init`   | `src/commands.ts`, `src/cli.tsx`, `src/startup.ts`                 |
-| Provider list / env keys | `src/constants.ts`, `src/env.ts`                                   |
-| Agent run + metadata     | `src/agent/index.ts`, `src/agent/prompt.ts`, `src/agent/utils.ts`  |
-| Agent-CLI adapters       | `src/agent/engines/{types,runner,index,claude-code,grok-build}.ts` |
-| Connectors / ingest      | `src/connectors/`, `src/ingestion.ts`                              |
-| Credential onboarding    | `src/credentials.tsx`, `src/credentials-flow.ts`                   |
+| Concern                  | Start here                                                           |
+| ------------------------ | -------------------------------------------------------------------- |
+| CLI / modes / `--init`   | `src/commands.ts`, `src/cli.tsx`, `src/startup.ts`                   |
+| Provider list / env keys | `src/constants.ts`, `src/env.ts`                                     |
+| Agent run + metadata     | `src/agent/index.ts`, `src/agent/prompt.ts`, `src/agent/utils.ts`    |
+| Agent-CLI engine         | `src/agent/engines/*` (adapters, runner, session store, write guard) |
+| Connectors / ingest      | `src/connectors/`, `src/ingestion.ts`                                |
+| Credential onboarding    | `src/credentials.tsx`, `src/credentials-flow.ts`                     |
 
 Full structure: use the repo tree / search; do not maintain a second inventory here.
 
 ## Branch status — `feat/agent-cli-grok-and-claude`
 
-Local integration of two upstream PRs that are still **open** and each conflict with `main`; kept rebased on latest `main`. Full divergence log + PR disposition: [FORK-NOTES.md](FORK-NOTES.md).
+Fork integrating two still-open upstream PRs — #280 `grok-build` + #181 `claude-code` (agent-cli providers under `src/agent/engines/`), kept rebased on `main`. Full story — PR disposition, per-commit divergence log, install/run steps, caveats: **[FORK-NOTES.md](FORK-NOTES.md)**.
 
-| Upstream PR                                               | Adds                                           |
-| --------------------------------------------------------- | ---------------------------------------------- |
-| [#280](https://github.com/langchain-ai/openwiki/pull/280) | `grok-build` — Grok Build CLI (subscription)   |
-| [#181](https://github.com/langchain-ai/openwiki/pull/181) | `claude-code` — Claude Code CLI (subscription) |
+**Edit-time invariant:** keep the `kind: "api" | "agent-cli"` discriminator on `ProviderConfig` intact — API-key providers need `kind: "api"` so the region/secret helpers in `src/constants.ts` narrow correctly.
 
-**Not** [#293](https://github.com/langchain-ai/openwiki/pull/293) (competing `cli-runner` design) — one agent-cli stack (`src/agent/engines/`), not two.
-
-**Remote:** this clone has a single remote `origin` → fork `audichuang/openwiki` (push here). Upstream `langchain-ai/openwiki` is not wired as a remote — reach it via `gh … --repo langchain-ai/openwiki`.
-
-**Invariant when merging new upstream providers:** keep the `kind: "api" | "agent-cli"` discriminator on `ProviderConfig` intact — API-key providers need `kind: "api"` so the region/secret helpers in `src/constants.ts` narrow correctly.
-
-**Run a subscription CLI (no API key):**
-
-```sh
-OPENWIKI_PROVIDER=grok-build  OPENWIKI_MODEL_ID=grok-4.5  openwiki …
-OPENWIKI_PROVIDER=claude-code OPENWIKI_MODEL_ID=default   openwiki …   # needs local `claude` logged in
-# override binary: OPENWIKI_CLAUDE_CODE_BINARY=/path/to/claude
-```
-
-Not an official release — do not treat as `npm install -g openwiki` behavior.
+**Remote:** single remote `origin` → fork `audichuang/openwiki` (push here). Upstream `langchain-ai/openwiki` is not wired as a remote — reach it via `gh … --repo langchain-ai/openwiki`.
 
 <!-- OPENWIKI:START -->
 
