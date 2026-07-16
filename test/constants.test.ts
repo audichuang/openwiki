@@ -351,15 +351,21 @@ describe("getDefaultModelId", () => {
 
 describe("getProvidersForKnownModelId", () => {
   test("finds the provider(s) whose known models include the id", () => {
+    // Claude model IDs are curated on both Anthropic and Gemini Enterprise
+    // (Vertex Model Garden). Order follows Object.keys(PROVIDER_CONFIGS).
     expect(getProvidersForKnownModelId("claude-opus-4-8", "openai")).toEqual([
       "anthropic",
+      "gemini-enterprise",
     ]);
   });
 
   test("excludes the provider passed in", () => {
     expect(getProvidersForKnownModelId("claude-opus-4-8", "anthropic")).toEqual(
-      [],
+      ["gemini-enterprise"],
     );
+    expect(
+      getProvidersForKnownModelId("claude-opus-4-8", "gemini-enterprise"),
+    ).toEqual(["anthropic"]);
   });
 
   test("returns empty for custom / unknown model ids", () => {

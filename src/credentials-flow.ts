@@ -1,4 +1,5 @@
 import {
+  getMissingProviderEnvKey,
   getProviderApiKeyEnvKey,
   getProviderBaseUrlEnvKey,
   isAgentCliProvider,
@@ -28,7 +29,7 @@ export function needsCredentialSetup(
 
   return (
     !hasValidConfiguredProvider() ||
-    !process.env[getProviderApiKeyEnvKey(provider)] ||
+    getMissingProviderEnvKey(provider) !== null ||
     needsBaseUrlStep(provider) ||
     needsModelStep(modelIdOverride) ||
     process.env.LANGSMITH_API_KEY === undefined
@@ -68,7 +69,7 @@ export function getInitialStep(
     return needsModelStep(modelIdOverride) ? "agent-check" : null;
   }
 
-  if (!process.env[getProviderApiKeyEnvKey(provider)]) {
+  if (needsApiKeyStep(provider)) {
     return "api-key";
   }
 
@@ -95,11 +96,17 @@ export function getNextStepAfterProvider(
     return "agent-check";
   }
 
-  if (!process.env[getProviderApiKeyEnvKey(provider)]) {
+  if (needsApiKeyStep(provider)) {
     return "api-key";
   }
 
   return getNextStepAfterApiKey(provider, modelIdOverride);
+}
+
+function needsApiKeyStep(provider: OpenWikiProvider): boolean {
+  const apiKeyEnvKey = getProviderApiKeyEnvKey(provider);
+
+  return Boolean(apiKeyEnvKey && !process.env[apiKeyEnvKey]);
 }
 
 export function getNextStepAfterAgentCheck(

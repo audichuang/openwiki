@@ -71,7 +71,6 @@ import {
   getProviderLabel,
   getProviderLoginCommand,
   getProviderModelOptions,
-  getProviderProjectEnvKey,
   isAgentCliProvider,
   isValidModelId,
   normalizeModelId,

@@ -4,7 +4,7 @@ Personal fork (`audichuang/openwiki`) that integrates two still-open upstream
 PRs and hardens them. This file is the durable record of what diverges from
 upstream and why. High-level status lives in `AGENTS.md`; this is the detail.
 
-- **Base:** upstream `main` `d43bd4f` (AWS Bedrock #327).
+- **Base:** upstream `main` `e1a2fea` (Gemini AI Studio + Gemini Enterprise #154).
 - **Integrates:** [#280](https://github.com/langchain-ai/openwiki/pull/280)
   (`grok-build`) + [#181](https://github.com/langchain-ai/openwiki/pull/181)
   (`claude-code`) — both still OPEN upstream, both conflict with `main`.
@@ -13,6 +13,16 @@ upstream and why. High-level status lives in `AGENTS.md`; this is the detail.
   and graft #293's good ideas instead of merging it.
 
 ## Timeline
+
+### 2026-07-16 — rebase onto upstream `e1a2fea`
+
+Rebased `agent-cli-on-main` onto upstream `main` after #179 (Vertex Claude) +
+#154 (Gemini / Gemini Enterprise). Kept the `kind: "api" | "agent-cli"`
+discriminated union; folded optional `apiKeyEnvKey` / `projectEnvKey` /
+`locationEnvKey` into `ApiProviderConfig` for keyless Vertex. Conflict files:
+`constants.ts`, `agent/index.ts`, `cli.tsx`, `credentials.tsx`, `env.ts`,
+`startup.ts`, `README.md`. None of the grafted PRs (#175/#215/#287/#289/#293)
+had landed on upstream yet — all retained.
 
 ### 2026-07-15 — rebase + first fix
 
