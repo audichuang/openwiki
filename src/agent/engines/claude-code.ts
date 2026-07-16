@@ -15,10 +15,11 @@ const execFileAsync = promisify(execFile);
  * Documentation-shaped tool allowlist: read/search anywhere in the repo,
  * write docs, read-only git, and the single exact rm needed to clean up the
  * temporary plan file. Network tools stay excluded on purpose. Write, Edit,
- * and MultiEdit are listed unscoped (no path restriction) because Claude Code
- * itself confines them to its working-directory boundary; the runner spawns
- * the CLI with cwd set to the repository root and never passes --add-dir, so
- * that boundary is exactly the target repository.
+ * and MultiEdit are listed unscoped (no path restriction): Claude Code confines
+ * them to its working directory plus any --add-dir roots, which the runner now
+ * passes for personal multi-root runs. Because that boundary is wider than
+ * openwiki/, a warn-only post-run git guard (src/agent/engines/write-guard.ts)
+ * flags repository-mode writes that land outside openwiki/.
  */
 export const CLAUDE_CODE_ALLOWED_TOOLS = [
   "Task",

@@ -91,6 +91,26 @@ process.stdin.on("end", () => {
 });
 `;
 
+// Writes an in-wiki page AND a stray file outside openwiki/, to exercise the
+// warn-only out-of-wiki write guard.
+const STRAY_WRITE_STUB = `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+if (process.argv.includes("--version")) {
+  console.log("0.0.0-stub");
+  process.exit(0);
+}
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
+  mkdirSync("openwiki", { recursive: true });
+  writeFileSync("openwiki/quickstart.md", "# Docs\\n");
+  writeFileSync("leak.txt", "stray write outside the wiki\\n");
+  console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "stub-session" }));
+  console.log(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "done" }] } }));
+  console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "done" }));
+});
+`;
+
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd });
   return stdout.trim();
@@ -227,6 +247,32 @@ describe("runOpenWikiAgent with an agent-cli provider", () => {
       { resume: true },
       { resume: false },
     ]);
+  }, 30_000);
+
+  test("warns (does not fail) when a repository run writes outside openwiki/", async () => {
+    const repo = await createFixtureRepo();
+    const stubDir = await mkdtemp(path.join(tmpdir(), "openwiki-stray-"));
+    const stubPath = path.join(stubDir, "stray.mjs");
+    await writeFile(stubPath, STRAY_WRITE_STUB, "utf8");
+    await chmod(stubPath, 0o755);
+    process.env[CLAUDE_CODE_BINARY_ENV_KEY] = stubPath;
+
+    const events: OpenWikiRunEvent[] = [];
+    const result = await runOpenWikiAgent("init", repo, {
+      outputMode: "repo-docs",
+      onEvent: (event) => events.push(event),
+    });
+
+    // The run still succeeds; the guard only warns.
+    expect(result).toEqual({ command: "init", model: "default" });
+
+    const warnings = events
+      .filter((event) => event.type === "text")
+      .map((event) => (event as { text: string }).text)
+      .filter((text) => text.includes("outside the openwiki/ wiki directory"));
+
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toContain("leak.txt");
   }, 30_000);
 
   test("chat run does not write update metadata", async () => {

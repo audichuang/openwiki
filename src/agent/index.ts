@@ -43,6 +43,11 @@ import {
 } from "./engines/session-store.js";
 import type { EngineRunSpec } from "./engines/types.js";
 import {
+  captureGitPorcelain,
+  findUnexpectedChanges,
+  formatOutOfWikiWarning,
+} from "./engines/write-guard.js";
+import {
   createRuntimeNote,
   createSystemPrompt,
   createUserPrompt,
@@ -452,6 +457,12 @@ async function runAgentCliRun(
   // directory (e.g. a multi-repo workspace), pass that path as --add-dir so
   // source notes like docs/etf_doc/* remain readable.
   const additionalDirs = resolveAgentCliAdditionalDirs(cwd, outputMode);
+  // Repository runs should only write under openwiki/, but the vendor CLI has
+  // unscoped write tools. Baseline the git tree so a warn-only guard can flag
+  // out-of-wiki writes after the run (local-wiki mode writes at the wiki root,
+  // so the openwiki/ prefix check does not apply there).
+  const writeGuardBaseline =
+    outputMode !== "local-wiki" ? await captureGitPorcelain(cwd) : null;
   const spec: EngineRunSpec = {
     command,
     cwd,
@@ -512,6 +523,21 @@ async function runAgentCliRun(
 
   if (outcome.sessionId) {
     setThreadSessionId(threadId, provider, outcome.sessionId);
+  }
+
+  if (writeGuardBaseline !== null) {
+    const porcelain = await captureGitPorcelain(cwd);
+    const warning =
+      porcelain === null
+        ? null
+        : formatOutOfWikiWarning(
+            findUnexpectedChanges(writeGuardBaseline, porcelain),
+          );
+
+    if (warning) {
+      emitDebug(options, "cli.write-guard=out-of-wiki");
+      options.onEvent?.({ type: "text", text: warning });
+    }
   }
 
   return finalizeAgentRun(command, cwd, modelId, options, prepared);
